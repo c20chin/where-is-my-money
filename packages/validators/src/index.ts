@@ -1,3 +1,3 @@
-export { accountSchema, createAccountSchema, updateAccountSchema } from "./accounts";
+export { accountSchema, createAccountSchema, updateAccountSchema, bulkCreateAccountsSchema } from "./accounts";
 export { snapshotSchema, createSnapshotSchema, updateSnapshotSchema, bulkUpsertSnapshotsSchema } from "./snapshots";
 export { userPreferencesSchema, updatePreferencesSchema } from "./preferences";

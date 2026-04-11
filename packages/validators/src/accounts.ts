@@ -12,3 +12,5 @@ export const accountSchema = z.object({
 export const createAccountSchema = accountSchema.omit({ id: true, isActive: true });
 
 export const updateAccountSchema = accountSchema.partial().omit({ id: true });
+
+export const bulkCreateAccountsSchema = z.array(createAccountSchema).min(1);
