@@ -99,25 +99,38 @@ export default async function DashboardPage({
     }
   }
 
-  // Monthly trends (converted to display currency)
-  const monthlyMap = new Map<number, Map<string, number>>();
+  // Per-account monthly trends (converted to display currency)
+  // Build account list and group snapshots by accountId → month
+  const accountList: { id: string; name: string; bankName: string | null }[] = [];
+  const seenAccountIds = new Set<string>();
+  const snapByAccountMonth = new Map<string, Map<number, (typeof snapshots)[0]>>();
   for (const snap of snapshots) {
-    if (!monthlyMap.has(snap.month)) {
-      monthlyMap.set(snap.month, new Map());
+    if (!seenAccountIds.has(snap.accountId)) {
+      seenAccountIds.add(snap.accountId);
+      accountList.push({ id: snap.accountId, name: snap.accountName, bankName: snap.bankName });
     }
-    const currMap = monthlyMap.get(snap.month)!;
-    currMap.set(snap.currencyCode, (currMap.get(snap.currencyCode) || 0) + parseFloat(snap.amount));
+    if (!snapByAccountMonth.has(snap.accountId)) {
+      snapByAccountMonth.set(snap.accountId, new Map());
+    }
+    snapByAccountMonth.get(snap.accountId)!.set(snap.month, snap);
   }
-  const monthlyTrends = [];
-  for (const [month, currMap] of [...monthlyMap.entries()].sort((a, b) => a[0] - b[0])) {
+
+  const allMonths = [...new Set(snapshots.map((s) => s.month))].sort((a, b) => a - b);
+  const accountTrends: Array<Record<string, number | string>> = [];
+
+  for (const month of allMonths) {
     const monthDate = `${year}-${String(month).padStart(2, "0")}-01`;
-    const conversions = await Promise.all(
-      [...currMap.entries()].map(([currency, amount]) =>
-        convertAmount(amount.toFixed(4), currency, displayCurrency, monthDate)
-      )
+    const entry: Record<string, string | number> = { month: getMonthName(month) };
+    await Promise.all(
+      [...snapByAccountMonth.entries()].map(async ([accountId, monthMap]) => {
+        const snap = monthMap.get(month);
+        if (snap) {
+          const converted = await convertAmount(snap.amount, snap.currencyCode, displayCurrency, monthDate);
+          entry[accountId] = parseFloat(converted);
+        }
+      })
     );
-    const total = conversions.reduce((sum, c) => sum + parseFloat(c), 0);
-    monthlyTrends.push({ month: getMonthName(month), total });
+    accountTrends.push(entry as Record<string, number | string>);
   }
 
   const hasData = latestByAccount.size > 0;
@@ -177,7 +190,8 @@ export default async function DashboardPage({
 
           {/* Charts */}
           <DashboardCharts
-            monthlyTrends={monthlyTrends}
+            accountTrends={accountTrends}
+            accounts={accountList}
             typeBreakdown={[...byType.values()]}
             displayCurrency={displayCurrency}
           />
