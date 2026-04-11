@@ -46,6 +46,7 @@ export type ExchangeRate = {
 export type UserPreferences = {
   userId: string;
   displayCurrency: string;
+  language: string;
 };
 
 export type DashboardData = {

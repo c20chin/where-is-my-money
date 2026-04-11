@@ -1,4 +1,4 @@
-import { pgTable, uuid, char } from "drizzle-orm/pg-core";
+import { pgTable, uuid, char, varchar } from "drizzle-orm/pg-core";
 import { users } from "./users";
 import { currencies } from "./currencies";
 
@@ -10,4 +10,7 @@ export const userPreferences = pgTable("user_preferences", {
     .notNull()
     .default("USD")
     .references(() => currencies.code),
+  language: varchar("language", { length: 10 })
+    .notNull()
+    .default("en"),
 });

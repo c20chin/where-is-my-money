@@ -24,6 +24,7 @@ export default async function DashboardPage({
     .from(userPreferences)
     .where(eq(userPreferences.userId, session.user.id));
   const displayCurrency = prefs?.displayCurrency || "EUR";
+  const language = prefs?.language || "en";
 
   // Get all snapshots for the year
   const snapshots = await db
@@ -126,7 +127,7 @@ export default async function DashboardPage({
             </CardHeader>
             <CardContent>
               <p className="text-4xl font-bold">
-                {formatCurrency(convertedGrandTotal, displayCurrency)}
+                {formatCurrency(convertedGrandTotal, displayCurrency, language)}
               </p>
               <p className="mt-1 text-sm opacity-80">
                 in {displayCurrency} as of {getMonthName(latestMonth)} {year}
@@ -144,10 +145,10 @@ export default async function DashboardPage({
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-2xl font-bold">{formatCurrency(total, currency)}</p>
+                  <p className="text-2xl font-bold">{formatCurrency(total, currency, language)}</p>
                   {currency !== displayCurrency && (
                     <p className="text-sm text-muted-foreground">
-                      ~ {formatCurrency(convertedTotal, displayCurrency)}
+                      ~ {formatCurrency(convertedTotal, displayCurrency, language)}
                     </p>
                   )}
                 </CardContent>
@@ -160,6 +161,7 @@ export default async function DashboardPage({
             monthlyTrends={monthlyTrends}
             typeBreakdown={[...byType.values()]}
             displayCurrency={displayCurrency}
+            language={language}
           />
         </>
       )}

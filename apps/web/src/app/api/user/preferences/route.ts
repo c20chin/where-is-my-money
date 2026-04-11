@@ -18,7 +18,7 @@ export async function GET() {
     .from(userPreferences)
     .where(eq(userPreferences.userId, session.user.id));
 
-  return NextResponse.json(prefs || { userId: session.user.id, displayCurrency: "USD" });
+  return NextResponse.json(prefs || { userId: session.user.id, displayCurrency: "USD", language: "en" });
 }
 
 export async function PUT(request: Request) {
@@ -38,10 +38,14 @@ export async function PUT(request: Request) {
     .values({
       userId: session.user.id,
       displayCurrency: parsed.data.displayCurrency,
+      language: parsed.data.language,
     })
     .onConflictDoUpdate({
       target: userPreferences.userId,
-      set: { displayCurrency: parsed.data.displayCurrency },
+      set: {
+        displayCurrency: parsed.data.displayCurrency,
+        language: parsed.data.language,
+      },
     })
     .returning();
 

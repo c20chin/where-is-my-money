@@ -21,9 +21,10 @@ type Props = {
   monthlyTrends: { month: string; total: number }[];
   typeBreakdown: { label: string; total: number }[];
   displayCurrency: string;
+  language: string;
 };
 
-export function DashboardCharts({ monthlyTrends, typeBreakdown, displayCurrency }: Props) {
+export function DashboardCharts({ monthlyTrends, typeBreakdown, displayCurrency, language }: Props) {
   return (
     <div className="grid gap-4 md:grid-cols-2">
       <Card>
@@ -38,7 +39,7 @@ export function DashboardCharts({ monthlyTrends, typeBreakdown, displayCurrency 
               <YAxis />
               <Tooltip
                 formatter={(value: number) =>
-                  new Intl.NumberFormat("en-US", {
+                  new Intl.NumberFormat(language, {
                     style: "currency",
                     currency: displayCurrency,
                   }).format(value)
