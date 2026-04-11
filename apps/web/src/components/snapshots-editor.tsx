@@ -203,7 +203,7 @@ export function SnapshotsEditor({ accounts, year, month }: Props) {
                         />
                       ) : (
                         <span className="w-[150px] text-sm">
-                          {snapshots[index].amount || <span className="text-muted-foreground">—</span>}
+                          {snapshots[index].amount !== "" ? snapshots[index].amount : <span className="text-muted-foreground">—</span>}
                         </span>
                       )}
                     </div>
