@@ -1,6 +1,6 @@
 import "server-only";
 import { db } from "./db";
-import { exchangeRates } from "@wimm/db/schema";
+import { exchangeRates, currencies } from "@wimm/db/schema";
 import { and, eq, lte, desc } from "drizzle-orm";
 
 const FRANKFURTER_API = "https://api.frankfurter.dev/v1";
@@ -22,12 +22,18 @@ export async function syncExchangeRates(date?: string): Promise<number> {
 
   const data: FrankfurterResponse = await response.json();
 
-  const values = Object.entries(data.rates).map(([currency, rate]) => ({
-    baseCurrency: data.base,
-    targetCurrency: currency,
-    rate: rate.toFixed(10),
-    date: data.date,
-  }));
+  // Only insert rates for currencies that exist in our currencies table
+  const knownCurrencies = await db.select({ code: currencies.code }).from(currencies);
+  const knownCodes = new Set(knownCurrencies.map((c) => c.code));
+
+  const values = Object.entries(data.rates)
+    .filter(([currency]) => knownCodes.has(currency))
+    .map(([currency, rate]) => ({
+      baseCurrency: data.base,
+      targetCurrency: currency,
+      rate: rate.toFixed(10),
+      date: data.date,
+    }));
 
   if (values.length === 0) return 0;
 
