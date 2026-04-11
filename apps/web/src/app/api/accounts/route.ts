@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { accounts, savingTypes, currencies } from "@wimm/db/schema";
 import { eq, and, isNull } from "drizzle-orm";
-import { createAccountSchema } from "@wimm/validators";
+import { createAccountSchema, bulkCreateAccountsSchema } from "@wimm/validators";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +42,31 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json();
+
+  // Bulk creation: body is an array
+  if (Array.isArray(body)) {
+    const parsed = bulkCreateAccountsSchema.safeParse(body);
+    if (!parsed.success) {
+      const rowErrors: Record<number, Record<string, string[]>> = {};
+      for (const issue of parsed.error.issues) {
+        const rowIndex = issue.path[0] as number;
+        const field = issue.path.slice(1).join(".") || "root";
+        if (!rowErrors[rowIndex]) rowErrors[rowIndex] = {};
+        if (!rowErrors[rowIndex][field]) rowErrors[rowIndex][field] = [];
+        rowErrors[rowIndex][field].push(issue.message);
+      }
+      return NextResponse.json({ rowErrors }, { status: 400 });
+    }
+
+    const created = await db
+      .insert(accounts)
+      .values(parsed.data.map((account) => ({ userId: session.user.id, ...account })))
+      .returning();
+
+    return NextResponse.json(created, { status: 201 });
+  }
+
+  // Single account creation
   const parsed = createAccountSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });

@@ -22,7 +22,7 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { Plus, Pencil, Trash2, X } from "lucide-react";
 
 type Account = {
   id: string;
@@ -45,48 +45,67 @@ type Props = {
   currencies: Currency[];
 };
 
+type RowForm = {
+  accountName: string;
+  bankName: string;
+  savingTypeId: string;
+  currencyCode: string;
+};
+
+type RowErrors = Record<string, string[]>;
+
+const emptyRow = (): RowForm => ({
+  accountName: "",
+  bankName: "",
+  savingTypeId: "",
+  currencyCode: "",
+});
+
 export function AccountsList({ accounts, savingTypes, currencies }: Props) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState<Account | null>(null);
-  const [form, setForm] = useState({
-    accountName: "",
-    bankName: "",
-    savingTypeId: "",
-    currencyCode: "",
-  });
 
-  function resetForm() {
-    setForm({ accountName: "", bankName: "", savingTypeId: "", currencyCode: "" });
-    setEditing(null);
-  }
+  // Edit / single-account dialog state
+  const [editOpen, setEditOpen] = useState(false);
+  const [editing, setEditing] = useState<Account | null>(null);
+  const [editForm, setEditForm] = useState<RowForm>(emptyRow());
+
+  // Bulk create dialog state
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [rows, setRows] = useState<RowForm[]>([emptyRow()]);
+  const [rowErrors, setRowErrors] = useState<Record<number, RowErrors>>({});
+
+  // ── Edit helpers ─────────────────────────────────────────────────────────────
 
   function openEdit(account: Account) {
     setEditing(account);
-    setForm({
+    setEditForm({
       accountName: account.accountName,
       bankName: account.bankName,
       savingTypeId: String(account.savingTypeId),
       currencyCode: account.currencyCode,
     });
-    setOpen(true);
+    setEditOpen(true);
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  function closeEdit() {
+    setEditOpen(false);
+    setEditing(null);
+    setEditForm(emptyRow());
+  }
+
+  async function handleEditSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!editing) return;
 
     const payload = {
-      accountName: form.accountName,
-      bankName: form.bankName,
-      savingTypeId: parseInt(form.savingTypeId),
-      currencyCode: form.currencyCode,
+      accountName: editForm.accountName,
+      bankName: editForm.bankName,
+      savingTypeId: parseInt(editForm.savingTypeId),
+      currencyCode: editForm.currencyCode,
     };
 
-    const url = editing ? `/api/accounts/${editing.id}` : "/api/accounts";
-    const method = editing ? "PUT" : "POST";
-
-    const res = await fetch(url, {
-      method,
+    const res = await fetch(`/api/accounts/${editing.id}`, {
+      method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
@@ -97,11 +116,81 @@ export function AccountsList({ accounts, savingTypes, currencies }: Props) {
       return;
     }
 
-    toast({ title: editing ? "Account updated" : "Account created" });
-    setOpen(false);
-    resetForm();
+    toast({ title: "Account updated" });
+    closeEdit();
     router.refresh();
   }
+
+  // ── Bulk create helpers ───────────────────────────────────────────────────────
+
+  function addRow() {
+    setRows((r) => [...r, emptyRow()]);
+  }
+
+  function removeRow(index: number) {
+    setRows((r) => r.filter((_, i) => i !== index));
+    setRowErrors((prev) => {
+      const next: Record<number, RowErrors> = {};
+      for (const [k, v] of Object.entries(prev)) {
+        const ki = Number(k);
+        if (ki === index) continue;
+        next[ki < index ? ki : ki - 1] = v;
+      }
+      return next;
+    });
+  }
+
+  function updateRow(index: number, field: keyof RowForm, value: string) {
+    setRows((r) => r.map((row, i) => (i === index ? { ...row, [field]: value } : row)));
+    // Clear error for this field when user edits it
+    setRowErrors((prev) => {
+      if (!prev[index]?.[field]) return prev;
+      const updated = { ...prev[index] };
+      delete updated[field];
+      return { ...prev, [index]: updated };
+    });
+  }
+
+  function closeBulk() {
+    setBulkOpen(false);
+    setRows([emptyRow()]);
+    setRowErrors({});
+  }
+
+  async function handleBulkSubmit(e: React.FormEvent) {
+    e.preventDefault();
+
+    const payload = rows.map((row) => ({
+      accountName: row.accountName,
+      bankName: row.bankName,
+      savingTypeId: parseInt(row.savingTypeId),
+      currencyCode: row.currencyCode,
+    }));
+
+    const res = await fetch("/api/accounts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      const data = await res.json();
+      if (data.rowErrors) {
+        setRowErrors(data.rowErrors);
+        toast({ title: "Please fix the errors below", variant: "destructive" });
+      } else {
+        toast({ title: "Error", description: JSON.stringify(data.error), variant: "destructive" });
+      }
+      return;
+    }
+
+    const created = await res.json();
+    toast({ title: `${created.length} account${created.length !== 1 ? "s" : ""} created` });
+    closeBulk();
+    router.refresh();
+  }
+
+  // ── Delete ────────────────────────────────────────────────────────────────────
 
   async function handleDelete(id: string) {
     if (!confirm("Are you sure you want to delete this account?")) return;
@@ -116,49 +205,163 @@ export function AccountsList({ accounts, savingTypes, currencies }: Props) {
     router.refresh();
   }
 
+  // ── Render ────────────────────────────────────────────────────────────────────
+
   return (
     <>
-      <Dialog
-        open={open}
-        onOpenChange={(v) => {
-          setOpen(v);
-          if (!v) resetForm();
-        }}
-      >
+      {/* Bulk create dialog */}
+      <Dialog open={bulkOpen} onOpenChange={(v) => { if (!v) closeBulk(); setBulkOpen(v); }}>
         <DialogTrigger asChild>
           <Button>
             <Plus className="mr-2 h-4 w-4" />
             Add Account
           </Button>
         </DialogTrigger>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Add Accounts</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleBulkSubmit}>
+            <div className="max-h-[60vh] overflow-y-auto space-y-4 pr-1">
+              {rows.map((row, index) => (
+                <div key={index} className="rounded-lg border p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-muted-foreground">
+                      Account {index + 1}
+                    </span>
+                    {rows.length > 1 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        onClick={() => removeRow(index)}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label htmlFor={`accountName-${index}`}>Account Name</Label>
+                      <Input
+                        id={`accountName-${index}`}
+                        value={row.accountName}
+                        onChange={(e) => updateRow(index, "accountName", e.target.value)}
+                        required
+                      />
+                      {rowErrors[index]?.accountName?.map((msg, i) => (
+                        <p key={i} className="text-xs text-destructive">{msg}</p>
+                      ))}
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor={`bankName-${index}`}>Bank Name</Label>
+                      <Input
+                        id={`bankName-${index}`}
+                        value={row.bankName}
+                        onChange={(e) => updateRow(index, "bankName", e.target.value)}
+                        required
+                      />
+                      {rowErrors[index]?.bankName?.map((msg, i) => (
+                        <p key={i} className="text-xs text-destructive">{msg}</p>
+                      ))}
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Saving Type</Label>
+                      <Select
+                        value={row.savingTypeId}
+                        onValueChange={(v) => updateRow(index, "savingTypeId", v)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {savingTypes.map((st) => (
+                            <SelectItem key={st.id} value={String(st.id)}>
+                              {st.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {rowErrors[index]?.savingTypeId?.map((msg, i) => (
+                        <p key={i} className="text-xs text-destructive">{msg}</p>
+                      ))}
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Currency</Label>
+                      <Select
+                        value={row.currencyCode}
+                        onValueChange={(v) => updateRow(index, "currencyCode", v)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select currency" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {currencies.map((c) => (
+                            <SelectItem key={c.code} value={c.code}>
+                              {c.symbol} {c.code} — {c.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {rowErrors[index]?.currencyCode?.map((msg, i) => (
+                        <p key={i} className="text-xs text-destructive">{msg}</p>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 flex items-center justify-between">
+              <Button type="button" variant="outline" onClick={addRow}>
+                <Plus className="mr-2 h-4 w-4" />
+                Add Row
+              </Button>
+              <div className="flex gap-2">
+                <DialogClose asChild>
+                  <Button type="button" variant="outline">
+                    Cancel
+                  </Button>
+                </DialogClose>
+                <Button type="submit">
+                  Save {rows.length > 1 ? `${rows.length} Accounts` : "Account"}
+                </Button>
+              </div>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit dialog */}
+      <Dialog open={editOpen} onOpenChange={(v) => !v && closeEdit()}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editing ? "Edit Account" : "New Account"}</DialogTitle>
+            <DialogTitle>Edit Account</DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleEditSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="accountName">Account Name</Label>
+              <Label htmlFor="edit-accountName">Account Name</Label>
               <Input
-                id="accountName"
-                value={form.accountName}
-                onChange={(e) => setForm((f) => ({ ...f, accountName: e.target.value }))}
+                id="edit-accountName"
+                value={editForm.accountName}
+                onChange={(e) => setEditForm((f) => ({ ...f, accountName: e.target.value }))}
                 required
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="bankName">Bank Name</Label>
+              <Label htmlFor="edit-bankName">Bank Name</Label>
               <Input
-                id="bankName"
-                value={form.bankName}
-                onChange={(e) => setForm((f) => ({ ...f, bankName: e.target.value }))}
+                id="edit-bankName"
+                value={editForm.bankName}
+                onChange={(e) => setEditForm((f) => ({ ...f, bankName: e.target.value }))}
                 required
               />
             </div>
             <div className="space-y-2">
               <Label>Saving Type</Label>
               <Select
-                value={form.savingTypeId}
-                onValueChange={(v) => setForm((f) => ({ ...f, savingTypeId: v }))}
+                value={editForm.savingTypeId}
+                onValueChange={(v) => setEditForm((f) => ({ ...f, savingTypeId: v }))}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select type" />
@@ -175,8 +378,8 @@ export function AccountsList({ accounts, savingTypes, currencies }: Props) {
             <div className="space-y-2">
               <Label>Currency</Label>
               <Select
-                value={form.currencyCode}
-                onValueChange={(v) => setForm((f) => ({ ...f, currencyCode: v }))}
+                value={editForm.currencyCode}
+                onValueChange={(v) => setEditForm((f) => ({ ...f, currencyCode: v }))}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select currency" />
@@ -196,7 +399,7 @@ export function AccountsList({ accounts, savingTypes, currencies }: Props) {
                   Cancel
                 </Button>
               </DialogClose>
-              <Button type="submit">{editing ? "Update" : "Create"}</Button>
+              <Button type="submit">Update</Button>
             </div>
           </form>
         </DialogContent>
