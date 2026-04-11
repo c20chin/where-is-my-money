@@ -1,3 +1,4 @@
+import "server-only";
 import { createDb, type Database } from "@wimm/db";
 
 let _db: Database | null = null;
