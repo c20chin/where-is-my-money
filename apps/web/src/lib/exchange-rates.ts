@@ -3,36 +3,40 @@ import { db } from "./db";
 import { exchangeRates, currencies } from "@wimm/db/schema";
 import { and, eq, lte, desc } from "drizzle-orm";
 
-const FRANKFURTER_API = "https://api.frankfurter.dev/v1";
+const EXCHANGE_API = "https://open.er-api.com/v6/latest";
 
-type FrankfurterResponse = {
-  base: string;
-  date: string;
+type ExchangeRateResponse = {
+  result: string;
+  base_code: string;
+  time_last_update_utc: string;
   rates: Record<string, number>;
 };
 
 export async function syncExchangeRates(date?: string): Promise<number> {
   const targetDate = date || new Date().toISOString().split("T")[0];
-  const url = `${FRANKFURTER_API}/${targetDate}`;
 
-  const response = await fetch(url);
+  // open.er-api.com only serves latest rates (free tier), so we use EUR as base
+  const response = await fetch(`${EXCHANGE_API}/EUR`);
   if (!response.ok) {
     throw new Error(`Failed to fetch exchange rates: ${response.statusText}`);
   }
 
-  const data: FrankfurterResponse = await response.json();
+  const data: ExchangeRateResponse = await response.json();
+  if (data.result !== "success") {
+    throw new Error("Exchange rate API returned non-success result");
+  }
 
   // Only insert rates for currencies that exist in our currencies table
   const knownCurrencies = await db.select({ code: currencies.code }).from(currencies);
   const knownCodes = new Set(knownCurrencies.map((c) => c.code));
 
   const values = Object.entries(data.rates)
-    .filter(([currency]) => knownCodes.has(currency))
+    .filter(([currency]) => knownCodes.has(currency) && currency !== "EUR")
     .map(([currency, rate]) => ({
-      baseCurrency: data.base,
+      baseCurrency: "EUR",
       targetCurrency: currency,
       rate: rate.toFixed(10),
-      date: data.date,
+      date: targetDate,
     }));
 
   if (values.length === 0) return 0;
