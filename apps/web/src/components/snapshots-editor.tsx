@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
 import { getMonthName } from "@/lib/utils";
-import { Save } from "lucide-react";
+import { Pencil, Save, X } from "lucide-react";
 
 type AccountSnapshot = {
   id: string;
@@ -47,14 +47,17 @@ const YEARS = Array.from({ length: 10 }, (_, i) => {
 
 export function SnapshotsEditor({ accounts, year, month }: Props) {
   const router = useRouter();
+  const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [snapshots, setSnapshots] = useState(
-    accounts.map((a) => ({
-      accountId: a.id,
-      amount: a.amount,
-      notes: a.notes,
-    }))
-  );
+
+  const initialSnapshots = accounts.map((a) => ({
+    accountId: a.id,
+    amount: a.amount,
+    notes: a.notes,
+  }));
+
+  const [snapshots, setSnapshots] = useState(initialSnapshots);
+  const [savedSnapshots, setSavedSnapshots] = useState(initialSnapshots);
 
   function updateSnapshot(index: number, field: "amount" | "notes", value: string) {
     setSnapshots((prev) => {
@@ -62,6 +65,15 @@ export function SnapshotsEditor({ accounts, year, month }: Props) {
       next[index] = { ...next[index], [field]: value };
       return next;
     });
+  }
+
+  function handleEdit() {
+    setIsEditing(true);
+  }
+
+  function handleCancel() {
+    setSnapshots(savedSnapshots);
+    setIsEditing(false);
   }
 
   function navigateTo(newYear: string, newMonth: string) {
@@ -79,6 +91,11 @@ export function SnapshotsEditor({ accounts, year, month }: Props) {
       return;
     }
 
+    // Optimistic update: treat edit as confirmed immediately
+    const previousSnapshots = savedSnapshots;
+    setSavedSnapshots(snapshots);
+    setIsEditing(false);
+
     const res = await fetch("/api/snapshots/bulk", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -87,9 +104,13 @@ export function SnapshotsEditor({ accounts, year, month }: Props) {
 
     if (!res.ok) {
       const error = await res.json();
-      toast({ title: "Error", description: JSON.stringify(error.error), variant: "destructive" });
+      // Revert optimistic update on error
+      setSavedSnapshots(previousSnapshots);
+      setSnapshots(previousSnapshots);
+      setIsEditing(true);
+      toast({ title: "Error saving snapshots", description: JSON.stringify(error.error), variant: "destructive" });
     } else {
-      toast({ title: "Snapshots saved" });
+      toast({ title: "Snapshots saved successfully" });
       router.refresh();
     }
 
@@ -142,10 +163,16 @@ export function SnapshotsEditor({ accounts, year, month }: Props) {
       ) : (
         <>
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
               <CardTitle>
                 {getMonthName(month)} {year}
               </CardTitle>
+              {!isEditing && (
+                <Button variant="outline" size="sm" onClick={handleEdit}>
+                  <Pencil className="mr-2 h-4 w-4" />
+                  Edit
+                </Button>
+              )}
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
@@ -165,30 +192,50 @@ export function SnapshotsEditor({ accounts, year, month }: Props) {
                       <span className="text-sm text-muted-foreground">
                         {account.currencySymbol}
                       </span>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        placeholder="0.00"
-                        className="w-[150px]"
-                        value={snapshots[index].amount}
-                        onChange={(e) => updateSnapshot(index, "amount", e.target.value)}
-                      />
+                      {isEditing ? (
+                        <Input
+                          type="number"
+                          step="0.01"
+                          placeholder="0.00"
+                          className="w-[150px]"
+                          value={snapshots[index].amount}
+                          onChange={(e) => updateSnapshot(index, "amount", e.target.value)}
+                        />
+                      ) : (
+                        <span className="w-[150px] text-sm">
+                          {snapshots[index].amount !== "" ? snapshots[index].amount : <span className="text-muted-foreground">—</span>}
+                        </span>
+                      )}
                     </div>
-                    <Input
-                      placeholder="Notes (optional)"
-                      value={snapshots[index].notes}
-                      onChange={(e) => updateSnapshot(index, "notes", e.target.value)}
-                    />
+                    {isEditing ? (
+                      <Input
+                        placeholder="Notes (optional)"
+                        value={snapshots[index].notes}
+                        onChange={(e) => updateSnapshot(index, "notes", e.target.value)}
+                      />
+                    ) : (
+                      <span className="text-sm text-muted-foreground">
+                        {snapshots[index].notes || "—"}
+                      </span>
+                    )}
                   </div>
                 ))}
               </div>
             </CardContent>
           </Card>
 
-          <Button onClick={handleSave} disabled={saving} size="lg">
-            <Save className="mr-2 h-4 w-4" />
-            {saving ? "Saving..." : "Save All"}
-          </Button>
+          {isEditing && (
+            <div className="flex items-center gap-3">
+              <Button onClick={handleSave} disabled={saving} size="lg">
+                <Save className="mr-2 h-4 w-4" />
+                {saving ? "Saving…" : "Save"}
+              </Button>
+              <Button variant="outline" size="lg" onClick={handleCancel} disabled={saving}>
+                <X className="mr-2 h-4 w-4" />
+                Cancel
+              </Button>
+            </div>
+          )}
         </>
       )}
     </>
