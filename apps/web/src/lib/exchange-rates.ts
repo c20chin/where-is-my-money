@@ -1,7 +1,7 @@
 import "server-only";
 import { db } from "./db";
 import { exchangeRates } from "@wimm/db/schema";
-import { and, eq } from "drizzle-orm";
+import { and, eq, lte, desc } from "drizzle-orm";
 
 const FRANKFURTER_API = "https://api.frankfurter.dev";
 
@@ -47,6 +47,10 @@ export async function convertAmount(
 ): Promise<string> {
   if (fromCurrency === toCurrency) return amount;
 
+  // Ensure rates exist in the DB; auto-sync if none are available at all
+  await ensureRatesAvailable(date);
+
+  // Use lte + desc so we find the most recent available rate on or before the requested date
   const [rate] = await db
     .select()
     .from(exchangeRates)
@@ -54,9 +58,11 @@ export async function convertAmount(
       and(
         eq(exchangeRates.baseCurrency, fromCurrency),
         eq(exchangeRates.targetCurrency, toCurrency),
-        eq(exchangeRates.date, date)
+        lte(exchangeRates.date, date)
       )
-    );
+    )
+    .orderBy(desc(exchangeRates.date))
+    .limit(1);
 
   if (rate) {
     return (parseFloat(amount) * parseFloat(rate.rate)).toFixed(4);
@@ -70,9 +76,11 @@ export async function convertAmount(
       and(
         eq(exchangeRates.baseCurrency, toCurrency),
         eq(exchangeRates.targetCurrency, fromCurrency),
-        eq(exchangeRates.date, date)
+        lte(exchangeRates.date, date)
       )
-    );
+    )
+    .orderBy(desc(exchangeRates.date))
+    .limit(1);
 
   if (reverseRate) {
     return (parseFloat(amount) / parseFloat(reverseRate.rate)).toFixed(4);
@@ -80,6 +88,28 @@ export async function convertAmount(
 
   // Try via EUR (frankfurter uses EUR as base)
   return await convertViaEur(amount, fromCurrency, toCurrency, date);
+}
+
+/**
+ * Ensures exchange rates are available in the database.
+ * If no rates exist at all, auto-syncs for the given date.
+ * Rates from Frankfurter are stored with the actual date returned by the API,
+ * which may differ from the requested date (e.g. weekends/holidays map to
+ * the nearest prior business day).
+ */
+async function ensureRatesAvailable(date: string): Promise<void> {
+  const [existing] = await db
+    .select({ id: exchangeRates.id })
+    .from(exchangeRates)
+    .limit(1);
+
+  if (!existing) {
+    try {
+      await syncExchangeRates(date);
+    } catch (err) {
+      console.error("Failed to auto-sync exchange rates:", err);
+    }
+  }
 }
 
 async function convertViaEur(
@@ -95,9 +125,11 @@ async function convertViaEur(
       and(
         eq(exchangeRates.baseCurrency, "EUR"),
         eq(exchangeRates.targetCurrency, fromCurrency),
-        eq(exchangeRates.date, date)
+        lte(exchangeRates.date, date)
       )
-    );
+    )
+    .orderBy(desc(exchangeRates.date))
+    .limit(1);
 
   const [toRate] = await db
     .select()
@@ -106,9 +138,11 @@ async function convertViaEur(
       and(
         eq(exchangeRates.baseCurrency, "EUR"),
         eq(exchangeRates.targetCurrency, toCurrency),
-        eq(exchangeRates.date, date)
+        lte(exchangeRates.date, date)
       )
-    );
+    )
+    .orderBy(desc(exchangeRates.date))
+    .limit(1);
 
   if (fromRate && toRate) {
     const amountInEur = parseFloat(amount) / parseFloat(fromRate.rate);
