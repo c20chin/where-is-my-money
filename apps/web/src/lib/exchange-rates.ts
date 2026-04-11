@@ -101,19 +101,19 @@ export async function convertAmount(
 }
 
 /**
- * Ensures exchange rates are available in the database.
- * If no rates exist at all, auto-syncs for the given date.
- * Rates from Frankfurter are stored with the actual date returned by the API,
- * which may differ from the requested date (e.g. weekends/holidays map to
- * the nearest prior business day).
+ * Ensures exchange rates are available in the database for the given date.
+ * Syncs if no rates exist, or if existing rates are more than 1 day old.
  */
 async function ensureRatesAvailable(date: string): Promise<void> {
   const [existing] = await db
-    .select({ id: exchangeRates.id })
+    .select({ date: exchangeRates.date })
     .from(exchangeRates)
+    .orderBy(desc(exchangeRates.date))
     .limit(1);
 
-  if (!existing) {
+  // Sync if no rates exist, or if latest rate is older than requested date
+  const needsSync = !existing || existing.date < date;
+  if (needsSync) {
     try {
       await syncExchangeRates(date);
     } catch (err) {
