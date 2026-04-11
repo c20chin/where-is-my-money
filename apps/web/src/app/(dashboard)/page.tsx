@@ -24,7 +24,7 @@ export default async function DashboardPage({
     .from(userPreferences)
     .where(eq(userPreferences.userId, session.user.id));
   const displayCurrency = prefs?.displayCurrency || "EUR";
-  const language = prefs?.language || "en";
+  const language = prefs?.language || "en-US";
 
   // Get all snapshots for the year
   const snapshots = await db

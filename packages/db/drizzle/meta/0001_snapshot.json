@@ -551,7 +551,7 @@
           "type": "varchar(10)",
           "primaryKey": false,
           "notNull": true,
-          "default": "'en'"
+          "default": "'en-US'"
         }
       },
       "indexes": {},

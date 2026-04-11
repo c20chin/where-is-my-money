@@ -18,7 +18,7 @@ export async function GET() {
     .from(userPreferences)
     .where(eq(userPreferences.userId, session.user.id));
 
-  return NextResponse.json(prefs || { userId: session.user.id, displayCurrency: "USD", language: "en" });
+  return NextResponse.json(prefs || { userId: session.user.id, displayCurrency: "USD", language: "en-US" });
 }
 
 export async function PUT(request: Request) {

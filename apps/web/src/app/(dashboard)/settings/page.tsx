@@ -23,7 +23,7 @@ export default async function SettingsPage() {
       <SettingsForm
         currencies={allCurrencies}
         currentCurrency={prefs?.displayCurrency ?? "USD"}
-        currentLanguage={prefs?.language ?? "en"}
+        currentLanguage={prefs?.language ?? "en-US"}
       />
     </div>
   );

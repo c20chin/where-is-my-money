@@ -12,5 +12,5 @@ export const userPreferences = pgTable("user_preferences", {
     .references(() => currencies.code),
   language: varchar("language", { length: 10 })
     .notNull()
-    .default("en"),
+    .default("en-US"),
 });

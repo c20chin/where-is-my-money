@@ -23,16 +23,17 @@ type Props = {
 };
 
 const SUPPORTED_LANGUAGES = [
-  { code: "en", label: "English" },
-  { code: "fr", label: "Français" },
-  { code: "de", label: "Deutsch" },
-  { code: "es", label: "Español" },
-  { code: "it", label: "Italiano" },
-  { code: "pt", label: "Português" },
-  { code: "ja", label: "日本語" },
-  { code: "zh", label: "中文" },
-  { code: "ko", label: "한국어" },
-  { code: "ar", label: "العربية" },
+  { code: "en-US", label: "English (US)" },
+  { code: "en-GB", label: "English (UK)" },
+  { code: "fr-FR", label: "Français" },
+  { code: "de-DE", label: "Deutsch" },
+  { code: "es-ES", label: "Español" },
+  { code: "it-IT", label: "Italiano" },
+  { code: "pt-BR", label: "Português (Brasil)" },
+  { code: "ja-JP", label: "日本語" },
+  { code: "zh-CN", label: "中文 (简体)" },
+  { code: "ko-KR", label: "한국어" },
+  { code: "ar-SA", label: "العربية" },
 ];
 
 export function SettingsForm({ currencies, currentCurrency, currentLanguage }: Props) {
@@ -55,7 +56,10 @@ export function SettingsForm({ currencies, currentCurrency, currentLanguage }: P
 
     if (!res.ok) {
       const error = await res.json();
-      toast({ title: "Error", description: JSON.stringify(error.error), variant: "destructive" });
+      const message = typeof error.error === "string"
+        ? error.error
+        : error.error?.message ?? "Failed to save settings";
+      toast({ title: "Error", description: message, variant: "destructive" });
       return;
     }
 

@@ -1,1 +1,1 @@
-ALTER TABLE "user_preferences" ADD COLUMN "language" varchar(10) DEFAULT 'en' NOT NULL;
+ALTER TABLE "user_preferences" ADD COLUMN "language" varchar(10) DEFAULT 'en-US' NOT NULL;
