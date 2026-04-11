@@ -68,6 +68,7 @@ export function AccountsList({ accounts, savingTypes, currencies }: Props) {
   const [editOpen, setEditOpen] = useState(false);
   const [editing, setEditing] = useState<Account | null>(null);
   const [editForm, setEditForm] = useState<RowForm>(emptyRow());
+  const [editErrors, setEditErrors] = useState<RowErrors>({});
 
   // Bulk create dialog state
   const [bulkOpen, setBulkOpen] = useState(false);
@@ -91,11 +92,23 @@ export function AccountsList({ accounts, savingTypes, currencies }: Props) {
     setEditOpen(false);
     setEditing(null);
     setEditForm(emptyRow());
+    setEditErrors({});
   }
 
   async function handleEditSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!editing) return;
+
+    // Client-side validation for Select fields
+    const errors: RowErrors = {};
+    if (!editForm.bankName.trim()) errors.bankName = ["Bank name is required"];
+    if (!editForm.savingTypeId) errors.savingTypeId = ["Saving type is required"];
+    if (!editForm.currencyCode) errors.currencyCode = ["Currency is required"];
+    if (Object.keys(errors).length > 0) {
+      setEditErrors(errors);
+      return;
+    }
+    setEditErrors({});
 
     const payload = {
       accountName: editForm.accountName,
@@ -159,6 +172,21 @@ export function AccountsList({ accounts, savingTypes, currencies }: Props) {
 
   async function handleBulkSubmit(e: React.FormEvent) {
     e.preventDefault();
+
+    // Client-side validation for Select fields before API call
+    const clientErrors: Record<number, RowErrors> = {};
+    rows.forEach((row, index) => {
+      const errors: RowErrors = {};
+      if (!row.bankName.trim()) errors.bankName = ["Bank name is required"];
+      if (!row.savingTypeId) errors.savingTypeId = ["Saving type is required"];
+      if (!row.currencyCode) errors.currencyCode = ["Currency is required"];
+      if (Object.keys(errors).length > 0) clientErrors[index] = errors;
+    });
+    if (Object.keys(clientErrors).length > 0) {
+      setRowErrors(clientErrors);
+      toast({ title: "Please fix the errors below", variant: "destructive" });
+      return;
+    }
 
     const payload = rows.map((row) => ({
       accountName: row.accountName,
@@ -255,7 +283,7 @@ export function AccountsList({ accounts, savingTypes, currencies }: Props) {
                       ))}
                     </div>
                     <div className="space-y-1">
-                      <Label htmlFor={`bankName-${index}`}>Bank Name</Label>
+                      <Label htmlFor={`bankName-${index}`}>Bank Name <span className="text-destructive">*</span></Label>
                       <Input
                         id={`bankName-${index}`}
                         value={row.bankName}
@@ -267,7 +295,7 @@ export function AccountsList({ accounts, savingTypes, currencies }: Props) {
                       ))}
                     </div>
                     <div className="space-y-1">
-                      <Label>Saving Type</Label>
+                      <Label>Saving Type <span className="text-destructive">*</span></Label>
                       <Select
                         value={row.savingTypeId}
                         onValueChange={(v) => updateRow(index, "savingTypeId", v)}
@@ -288,7 +316,7 @@ export function AccountsList({ accounts, savingTypes, currencies }: Props) {
                       ))}
                     </div>
                     <div className="space-y-1">
-                      <Label>Currency</Label>
+                      <Label>Currency <span className="text-destructive">*</span></Label>
                       <Select
                         value={row.currencyCode}
                         onValueChange={(v) => updateRow(index, "currencyCode", v)}
@@ -349,19 +377,28 @@ export function AccountsList({ accounts, savingTypes, currencies }: Props) {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="edit-bankName">Bank Name</Label>
+              <Label htmlFor="edit-bankName">Bank Name <span className="text-destructive">*</span></Label>
               <Input
                 id="edit-bankName"
                 value={editForm.bankName}
-                onChange={(e) => setEditForm((f) => ({ ...f, bankName: e.target.value }))}
+                onChange={(e) => {
+                  setEditForm((f) => ({ ...f, bankName: e.target.value }));
+                  if (editErrors.bankName) setEditErrors(({ bankName: _, ...rest }) => rest);
+                }}
                 required
               />
+              {editErrors.bankName?.map((msg) => (
+                <p key={msg} className="text-xs text-destructive">{msg}</p>
+              ))}
             </div>
             <div className="space-y-2">
-              <Label>Saving Type</Label>
+              <Label>Saving Type <span className="text-destructive">*</span></Label>
               <Select
                 value={editForm.savingTypeId}
-                onValueChange={(v) => setEditForm((f) => ({ ...f, savingTypeId: v }))}
+                onValueChange={(v) => {
+                  setEditForm((f) => ({ ...f, savingTypeId: v }));
+                  if (editErrors.savingTypeId) setEditErrors(({ savingTypeId: _, ...rest }) => rest);
+                }}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select type" />
@@ -374,12 +411,18 @@ export function AccountsList({ accounts, savingTypes, currencies }: Props) {
                   ))}
                 </SelectContent>
               </Select>
+              {editErrors.savingTypeId?.map((msg) => (
+                <p key={msg} className="text-xs text-destructive">{msg}</p>
+              ))}
             </div>
             <div className="space-y-2">
-              <Label>Currency</Label>
+              <Label>Currency <span className="text-destructive">*</span></Label>
               <Select
                 value={editForm.currencyCode}
-                onValueChange={(v) => setEditForm((f) => ({ ...f, currencyCode: v }))}
+                onValueChange={(v) => {
+                  setEditForm((f) => ({ ...f, currencyCode: v }));
+                  if (editErrors.currencyCode) setEditErrors(({ currencyCode: _, ...rest }) => rest);
+                }}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select currency" />
@@ -392,6 +435,9 @@ export function AccountsList({ accounts, savingTypes, currencies }: Props) {
                   ))}
                 </SelectContent>
               </Select>
+              {editErrors.currencyCode?.map((msg) => (
+                <p key={msg} className="text-xs text-destructive">{msg}</p>
+              ))}
             </div>
             <div className="flex justify-end gap-2">
               <DialogClose asChild>
