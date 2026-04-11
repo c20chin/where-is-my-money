@@ -22,6 +22,9 @@ export async function Nav() {
             <Link href="/snapshots" className="text-muted-foreground hover:text-foreground">
               Snapshots
             </Link>
+            <Link href="/settings" className="text-muted-foreground hover:text-foreground">
+              Settings
+            </Link>
           </div>
         </div>
         <div className="flex items-center gap-4">
