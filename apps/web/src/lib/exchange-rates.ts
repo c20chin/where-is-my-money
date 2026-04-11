@@ -3,7 +3,7 @@ import { db } from "./db";
 import { exchangeRates } from "@wimm/db/schema";
 import { and, eq, lte, desc } from "drizzle-orm";
 
-const FRANKFURTER_API = "https://api.frankfurter.dev";
+const FRANKFURTER_API = "https://api.frankfurter.dev/v1";
 
 type FrankfurterResponse = {
   base: string;
