@@ -1,3 +1,4 @@
+import "server-only";
 import { db } from "./db";
 import { exchangeRates } from "@wimm/db/schema";
 import { and, eq } from "drizzle-orm";
