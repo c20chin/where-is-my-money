@@ -69,36 +69,56 @@ export default async function DashboardPage({
   }
 
   let convertedGrandTotal = 0;
-  const totalsByCurrency = [];
-  for (const [currency, total] of byCurrency) {
-    const converted = await convertAmount(total.toFixed(4), currency, displayCurrency, latestDate);
-    totalsByCurrency.push({ currency, total: total.toFixed(4), convertedTotal: converted });
-    convertedGrandTotal += parseFloat(converted);
+  const totalsByCurrency = await Promise.all(
+    [...byCurrency.entries()].map(async ([currency, total]) => {
+      const convertedTotal = await convertAmount(total.toFixed(4), currency, displayCurrency, latestDate);
+      return { currency, total: total.toFixed(4), convertedTotal };
+    })
+  );
+  for (const { convertedTotal } of totalsByCurrency) {
+    convertedGrandTotal += parseFloat(convertedTotal);
   }
 
-  // Compute totals by type
+  // Compute totals by type (converted to display currency)
   const byType = new Map<string, { label: string; total: number }>();
-  for (const snap of latestByAccount.values()) {
+  const byTypeEntries = [...latestByAccount.values()];
+  const byTypeConverted = await Promise.all(
+    byTypeEntries.map((snap) =>
+      convertAmount(snap.amount, snap.currencyCode, displayCurrency, latestDate)
+    )
+  );
+  for (let i = 0; i < byTypeEntries.length; i++) {
+    const snap = byTypeEntries[i];
     const key = snap.savingTypeLabel || "Other";
+    const convertedAmount = parseFloat(byTypeConverted[i]);
     const current = byType.get(key);
     if (current) {
-      current.total += parseFloat(snap.amount);
+      current.total += convertedAmount;
     } else {
-      byType.set(key, { label: key, total: parseFloat(snap.amount) });
+      byType.set(key, { label: key, total: convertedAmount });
     }
   }
 
-  // Monthly trends
-  const monthlyMap = new Map<number, number>();
+  // Monthly trends (converted to display currency)
+  const monthlyMap = new Map<number, Map<string, number>>();
   for (const snap of snapshots) {
-    monthlyMap.set(snap.month, (monthlyMap.get(snap.month) || 0) + parseFloat(snap.amount));
+    if (!monthlyMap.has(snap.month)) {
+      monthlyMap.set(snap.month, new Map());
+    }
+    const currMap = monthlyMap.get(snap.month)!;
+    currMap.set(snap.currencyCode, (currMap.get(snap.currencyCode) || 0) + parseFloat(snap.amount));
   }
-  const monthlyTrends = [...monthlyMap.entries()]
-    .sort((a, b) => a[0] - b[0])
-    .map(([month, total]) => ({
-      month: getMonthName(month),
-      total,
-    }));
+  const monthlyTrends = [];
+  for (const [month, currMap] of [...monthlyMap.entries()].sort((a, b) => a[0] - b[0])) {
+    const monthDate = `${year}-${String(month).padStart(2, "0")}-01`;
+    const conversions = await Promise.all(
+      [...currMap.entries()].map(([currency, amount]) =>
+        convertAmount(amount.toFixed(4), currency, displayCurrency, monthDate)
+      )
+    );
+    const total = conversions.reduce((sum, c) => sum + parseFloat(c), 0);
+    monthlyTrends.push({ month: getMonthName(month), total });
+  }
 
   const hasData = latestByAccount.size > 0;
 
