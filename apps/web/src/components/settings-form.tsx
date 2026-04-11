@@ -58,7 +58,7 @@ export function SettingsForm({ currencies, currentCurrency, currentLanguage }: P
       const error = await res.json();
       const message = typeof error.error === "string"
         ? error.error
-        : error.error?.message ?? "Failed to save settings";
+        : error.error?.message ?? "Unable to save preferences. Please try again.";
       toast({ title: "Error", description: message, variant: "destructive" });
       return;
     }
