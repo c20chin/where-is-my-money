@@ -213,7 +213,10 @@ export function InvestmentsManager({
                   value={formData.targetName}
                   onChange={(e) => {
                     setFormData({ ...formData, targetName: e.target.value });
-                    if (errors.targetName) setErrors({ ...errors, targetName: undefined });
+                    if (errors.targetName) {
+                      const { targetName, ...rest } = errors;
+                      setErrors(rest);
+                    }
                   }}
                   required
                 />
@@ -233,7 +236,10 @@ export function InvestmentsManager({
                   value={formData.percentage}
                   onChange={(e) => {
                     setFormData({ ...formData, percentage: e.target.value });
-                    if (errors.percentage) setErrors({ ...errors, percentage: undefined });
+                    if (errors.percentage) {
+                      const { percentage, ...rest } = errors;
+                      setErrors(rest);
+                    }
 
                     // Show real-time suggestion if over limit
                     const inputValue = parseFloat(e.target.value);
