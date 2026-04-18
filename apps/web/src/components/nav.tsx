@@ -1,9 +1,19 @@
-import Link from "next/link";
-import { auth, signOut } from "@/lib/auth";
-import { Button } from "@/components/ui/button";
+"use client";
 
-export async function Nav() {
-  const session = await auth();
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+
+export function Nav({ userName, onSignOut }: { userName?: string | null; onSignOut: () => void }) {
+  const pathname = usePathname();
+
+  const links = [
+    { href: "/", label: "Dashboard" },
+    { href: "/accounts", label: "Accounts" },
+    { href: "/snapshots", label: "Snapshots" },
+    { href: "/settings", label: "Settings" },
+  ];
 
   return (
     <nav className="border-b bg-background">
@@ -12,35 +22,33 @@ export async function Nav() {
           <Link href="/" className="text-lg font-semibold">
             WIMM
           </Link>
-          <div className="flex items-center gap-4 text-sm">
-            <Link href="/" className="text-muted-foreground hover:text-foreground">
-              Dashboard
-            </Link>
-            <Link href="/accounts" className="text-muted-foreground hover:text-foreground">
-              Accounts
-            </Link>
-            <Link href="/snapshots" className="text-muted-foreground hover:text-foreground">
-              Snapshots
-            </Link>
-            <Link href="/settings" className="text-muted-foreground hover:text-foreground">
-              Settings
-            </Link>
+          <div className="flex items-center gap-1 text-sm">
+            {links.map((link) => {
+              const isActive = pathname === link.href;
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className={cn(
+                    "px-3 py-1.5 rounded-md transition-all duration-200",
+                    isActive
+                      ? "bg-primary text-primary-foreground font-semibold shadow-sm"
+                      : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                  )}
+                >
+                  {link.label}
+                </Link>
+              );
+            })}
           </div>
         </div>
         <div className="flex items-center gap-4">
-          {session?.user?.name && (
-            <span className="text-sm text-muted-foreground">{session.user.name}</span>
+          {userName && (
+            <span className="text-sm text-muted-foreground">{userName}</span>
           )}
-          <form
-            action={async () => {
-              "use server";
-              await signOut({ redirectTo: "/login" });
-            }}
-          >
-            <Button variant="ghost" size="sm" type="submit">
-              Sign out
-            </Button>
-          </form>
+          <Button variant="ghost" size="sm" onClick={onSignOut}>
+            Sign out
+          </Button>
         </div>
       </div>
     </nav>

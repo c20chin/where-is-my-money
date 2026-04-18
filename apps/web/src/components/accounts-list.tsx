@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
 import { Plus, Pencil, Trash2, X } from "lucide-react";
+import { InvestmentsManager } from "./investments-manager";
 
 type Account = {
   id: string;
@@ -43,6 +44,7 @@ type Props = {
   accounts: Account[];
   savingTypes: SavingType[];
   currencies: Currency[];
+  investmentsByAccount: Record<string, any[]>;
 };
 
 type RowForm = {
@@ -61,7 +63,7 @@ const emptyRow = (): RowForm => ({
   currencyCode: "",
 });
 
-export function AccountsList({ accounts, savingTypes, currencies }: Props) {
+export function AccountsList({ accounts, savingTypes, currencies, investmentsByAccount }: Props) {
   const router = useRouter();
 
   // Edit / single-account dialog state
@@ -124,8 +126,12 @@ export function AccountsList({ accounts, savingTypes, currencies }: Props) {
     });
 
     if (!res.ok) {
-      const error = await res.json();
-      toast({ title: "Error", description: JSON.stringify(error.error), variant: "destructive" });
+      try {
+        const error = await res.json();
+        toast({ title: "Error", description: JSON.stringify(error.error), variant: "destructive" });
+      } catch {
+        toast({ title: "Error", description: "Failed to update account", variant: "destructive" });
+      }
       return;
     }
 
@@ -195,24 +201,36 @@ export function AccountsList({ accounts, savingTypes, currencies }: Props) {
       currencyCode: row.currencyCode,
     }));
 
+    console.log("Sending payload:", payload);
+
     const res = await fetch("/api/accounts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
 
+    console.log("Response status:", res.status);
+    console.log("Response ok:", res.ok);
+
     if (!res.ok) {
-      const data = await res.json();
-      if (data.rowErrors) {
-        setRowErrors(data.rowErrors);
-        toast({ title: "Please fix the errors below", variant: "destructive" });
-      } else {
-        toast({ title: "Error", description: JSON.stringify(data.error), variant: "destructive" });
+      try {
+        const data = await res.json();
+        console.log("Error data:", data);
+        if (data.rowErrors) {
+          setRowErrors(data.rowErrors);
+          toast({ title: "Please fix the errors below", variant: "destructive" });
+        } else {
+          toast({ title: "Error", description: JSON.stringify(data.error), variant: "destructive" });
+        }
+      } catch (err) {
+        console.error("JSON parse error:", err);
+        toast({ title: "Error", description: "Failed to create accounts", variant: "destructive" });
       }
       return;
     }
 
     const created = await res.json();
+    console.log("Created accounts:", created);
     toast({ title: `${created.length} account${created.length !== 1 ? "s" : ""} created` });
     closeBulk();
     router.refresh();
@@ -462,7 +480,7 @@ export function AccountsList({ accounts, savingTypes, currencies }: Props) {
           {accounts.map((account) => (
             <Card key={account.id}>
               <CardContent className="flex items-center justify-between py-4">
-                <div>
+                <div className="flex-1">
                   <p className="font-semibold">{account.accountName}</p>
                   <p className="text-sm text-muted-foreground">
                     {account.bankName} · {account.savingTypeLabel} · {account.currencySymbol}{" "}
@@ -470,6 +488,13 @@ export function AccountsList({ accounts, savingTypes, currencies }: Props) {
                   </p>
                 </div>
                 <div className="flex gap-2">
+                  {account.savingTypeId === 4 && (
+                    <InvestmentsManager
+                      accountId={account.id}
+                      accountName={account.accountName}
+                      investments={investmentsByAccount[account.id] || []}
+                    />
+                  )}
                   <Button variant="ghost" size="icon" onClick={() => openEdit(account)}>
                     <Pencil className="h-4 w-4" />
                   </Button>

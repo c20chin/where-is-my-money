@@ -6,3 +6,4 @@ export { savingTypes } from "./saving-types";
 export { accounts } from "./accounts";
 export { balanceSnapshots } from "./balance-snapshots";
 export { userPreferences } from "./user-preferences";
+export { investments } from "./investments";

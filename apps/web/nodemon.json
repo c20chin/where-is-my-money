@@ -1,0 +1,6 @@
+{
+  "watch": [".env.local", ".env"],
+  "ext": "env,local",
+  "exec": "pnpm turbo dev",
+  "delay": 500
+}

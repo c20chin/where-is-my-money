@@ -1,32 +1,11 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { accounts } from "@wimm/db/schema";
+import { investments, accounts } from "@wimm/db/schema";
 import { eq, and } from "drizzle-orm";
-import { updateAccountSchema } from "@wimm/validators";
+import { updateInvestmentSchema } from "@wimm/validators";
 
 export const dynamic = "force-dynamic";
-
-export async function GET(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
-  const [account] = await db
-    .select()
-    .from(accounts)
-    .where(and(eq(accounts.id, params.id), eq(accounts.userId, session.user.id)));
-
-  if (!account) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
-
-  return NextResponse.json(account);
-}
 
 export async function PUT(
   request: Request,
@@ -37,21 +16,32 @@ export async function PUT(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  // Get investment with account ownership check
+  const [investment] = await db
+    .select({
+      investment: investments,
+      accountUserId: accounts.userId,
+    })
+    .from(investments)
+    .innerJoin(accounts, eq(investments.accountId, accounts.id))
+    .where(eq(investments.id, params.id));
+
+  if (!investment || investment.accountUserId !== session.user.id) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
   const body = await request.json();
-  const parsed = updateAccountSchema.safeParse(body);
+  const parsed = updateInvestmentSchema.safeParse(body);
+
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
   const [updated] = await db
-    .update(accounts)
+    .update(investments)
     .set({ ...parsed.data, updatedAt: new Date() })
-    .where(and(eq(accounts.id, params.id), eq(accounts.userId, session.user.id)))
+    .where(eq(investments.id, params.id))
     .returning();
-
-  if (!updated) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
 
   return NextResponse.json(updated);
 }
@@ -65,14 +55,21 @@ export async function DELETE(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const [deleted] = await db
-    .delete(accounts)
-    .where(and(eq(accounts.id, params.id), eq(accounts.userId, session.user.id)))
-    .returning();
+  // Get investment with account ownership check
+  const [investment] = await db
+    .select({
+      investment: investments,
+      accountUserId: accounts.userId,
+    })
+    .from(investments)
+    .innerJoin(accounts, eq(investments.accountId, accounts.id))
+    .where(eq(investments.id, params.id));
 
-  if (!deleted) {
+  if (!investment || investment.accountUserId !== session.user.id) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
+
+  await db.delete(investments).where(eq(investments.id, params.id));
 
   return NextResponse.json({ success: true });
 }

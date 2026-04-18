@@ -41,44 +41,75 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const body = await request.json();
+  try {
+    const body = await request.json();
+    console.log("[POST /api/accounts] Request body:", JSON.stringify(body, null, 2));
 
-  // Bulk creation: body is an array
-  if (Array.isArray(body)) {
-    const parsed = bulkCreateAccountsSchema.safeParse(body);
-    if (!parsed.success) {
-      const rowErrors: Record<number, Record<string, string[]>> = {};
-      for (const issue of parsed.error.issues) {
-        const rowIndex = issue.path[0] as number;
-        const field = issue.path.slice(1).join(".") || "root";
-        if (!rowErrors[rowIndex]) rowErrors[rowIndex] = {};
-        if (!rowErrors[rowIndex][field]) rowErrors[rowIndex][field] = [];
-        rowErrors[rowIndex][field].push(issue.message);
+    // Bulk creation: body is an array
+    if (Array.isArray(body)) {
+      const parsed = bulkCreateAccountsSchema.safeParse(body);
+      if (!parsed.success) {
+        console.log("[POST /api/accounts] Validation failed:", parsed.error);
+        const rowErrors: Record<number, Record<string, string[]>> = {};
+        for (const issue of parsed.error.issues) {
+          const rowIndex = issue.path[0] as number;
+          const field = issue.path.slice(1).join(".") || "root";
+          if (!rowErrors[rowIndex]) rowErrors[rowIndex] = {};
+          if (!rowErrors[rowIndex][field]) rowErrors[rowIndex][field] = [];
+          rowErrors[rowIndex][field].push(issue.message);
+        }
+        return NextResponse.json({ rowErrors }, { status: 400 });
       }
-      return NextResponse.json({ rowErrors }, { status: 400 });
+
+      console.log("[POST /api/accounts] Validation passed, inserting accounts");
+      try {
+        const created = await db
+          .insert(accounts)
+          .values(parsed.data.map((account) => ({ userId: session.user.id, ...account })))
+          .returning();
+
+        console.log("[POST /api/accounts] Successfully created:", created.length, "accounts");
+        return NextResponse.json(created, { status: 201 });
+      } catch (dbError: any) {
+        console.error("[POST /api/accounts] Database error:", dbError);
+        return NextResponse.json(
+          { error: "Database error", message: dbError.message, detail: dbError.detail || dbError },
+          { status: 500 }
+        );
+      }
     }
 
-    const created = await db
-      .insert(accounts)
-      .values(parsed.data.map((account) => ({ userId: session.user.id, ...account })))
-      .returning();
+    // Single account creation
+    const parsed = createAccountSchema.safeParse(body);
+    if (!parsed.success) {
+      console.log("[POST /api/accounts] Validation failed:", parsed.error);
+      return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+    }
 
-    return NextResponse.json(created, { status: 201 });
+    console.log("[POST /api/accounts] Validation passed, inserting single account");
+    try {
+      const [account] = await db
+        .insert(accounts)
+        .values({
+          userId: session.user.id,
+          ...parsed.data,
+        })
+        .returning();
+
+      console.log("[POST /api/accounts] Successfully created account:", account.id);
+      return NextResponse.json(account, { status: 201 });
+    } catch (dbError: any) {
+      console.error("[POST /api/accounts] Database error:", dbError);
+      return NextResponse.json(
+        { error: "Database error", message: dbError.message, detail: dbError.detail || dbError },
+        { status: 500 }
+      );
+    }
+  } catch (error: any) {
+    console.error("[POST /api/accounts] Unexpected error:", error);
+    return NextResponse.json(
+      { error: "Internal server error", message: error.message },
+      { status: 500 }
+    );
   }
-
-  // Single account creation
-  const parsed = createAccountSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
-  }
-
-  const [account] = await db
-    .insert(accounts)
-    .values({
-      userId: session.user.id,
-      ...parsed.data,
-    })
-    .returning();
-
-  return NextResponse.json(account, { status: 201 });
 }

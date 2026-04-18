@@ -1,13 +1,23 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { userPreferences, accounts, balanceSnapshots, savingTypes } from "@wimm/db/schema";
-import { eq, and, isNull, desc } from "drizzle-orm";
+import { userPreferences, accounts, balanceSnapshots, savingTypes, investments } from "@wimm/db/schema";
+import { eq, and, isNull, desc, inArray } from "drizzle-orm";
 import { convertAmount } from "@/lib/exchange-rates";
 import { formatCurrency, getMonthName } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { DashboardCharts } from "@/components/dashboard-charts";
+import dynamic from "next/dynamic";
 
-export const dynamic = "force-dynamic";
+const DashboardCharts = dynamic(() => import("@/components/dashboard-charts").then(mod => ({ default: mod.DashboardCharts })), {
+  loading: () => <div className="grid gap-4 md:grid-cols-2"><Card><CardContent className="h-[300px] flex items-center justify-center">Loading charts...</CardContent></Card></div>,
+  ssr: false,
+});
+
+const InvestmentPieChart = dynamic(() => import("@/components/investment-pie-chart").then(mod => ({ default: mod.InvestmentPieChart })), {
+  loading: () => <div className="h-[300px] flex items-center justify-center text-muted-foreground">Loading chart...</div>,
+  ssr: false,
+});
+
+export const revalidate = 30; // Cache for 30 seconds
 
 export default async function DashboardPage({
   searchParams,
@@ -24,6 +34,19 @@ export default async function DashboardPage({
     .from(userPreferences)
     .where(eq(userPreferences.userId, session.user.id));
   const displayCurrency = prefs?.displayCurrency || "EUR";
+
+  // Get active accounts
+  const activeAccounts = await db
+    .select({
+      id: accounts.id,
+      accountName: accounts.accountName,
+      bankName: accounts.bankName,
+      currencyCode: accounts.currencyCode,
+      savingTypeLabel: savingTypes.label,
+    })
+    .from(accounts)
+    .leftJoin(savingTypes, eq(accounts.savingTypeId, savingTypes.id))
+    .where(and(eq(accounts.userId, session.user.id), isNull(accounts.deletedAt)));
 
   // Get all snapshots for the year
   const snapshots = await db
@@ -122,6 +145,31 @@ export default async function DashboardPage({
 
   const hasData = latestByAccount.size > 0;
 
+  // Fetch investments for investment accounts
+  const investmentAccounts = await db
+    .select({
+      id: accounts.id,
+      accountName: accounts.accountName,
+      bankName: accounts.bankName,
+      savingTypeId: accounts.savingTypeId,
+    })
+    .from(accounts)
+    .where(and(eq(accounts.userId, session.user.id), isNull(accounts.deletedAt), eq(accounts.savingTypeId, 4)));
+
+  const accountIds = investmentAccounts.map(a => a.id);
+  const allInvestments = accountIds.length > 0
+    ? await db.select().from(investments).where(inArray(investments.accountId, accountIds))
+    : [];
+
+  const investmentsByAccount = new Map<string, typeof allInvestments>();
+  for (const account of investmentAccounts) {
+    investmentsByAccount.set(account.id, []);
+  }
+  for (const inv of allInvestments) {
+    const list = investmentsByAccount.get(inv.accountId);
+    if (list) list.push(inv);
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -132,9 +180,30 @@ export default async function DashboardPage({
       {!hasData ? (
         <Card>
           <CardContent className="py-12 text-center">
-            <p className="text-muted-foreground">
-              No data yet. Add accounts and enter monthly balances to see your dashboard.
-            </p>
+            {activeAccounts.length === 0 ? (
+              <p className="text-muted-foreground">
+                No accounts yet. Go to Accounts page to add your first account.
+              </p>
+            ) : (
+              <div className="space-y-4">
+                <p className="text-muted-foreground">
+                  You have {activeAccounts.length} account{activeAccounts.length !== 1 ? "s" : ""} but no balance snapshots yet.
+                </p>
+                <div className="grid gap-2 max-w-md mx-auto text-left">
+                  {activeAccounts.map((account) => (
+                    <div key={account.id} className="p-3 border rounded-lg">
+                      <p className="font-medium">{account.accountName}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {account.bankName} · {account.savingTypeLabel} · {account.currencyCode}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-muted-foreground mt-4">
+                  Go to Snapshots page to enter monthly balances.
+                </p>
+              </div>
+            )}
           </CardContent>
         </Card>
       ) : (
@@ -181,6 +250,25 @@ export default async function DashboardPage({
             typeBreakdown={[...byType.values()]}
             displayCurrency={displayCurrency}
           />
+
+          {/* Investment Pie Charts */}
+          {investmentAccounts.length > 0 && (
+            <div className="space-y-4">
+              <h2 className="text-2xl font-bold">Investment Allocations</h2>
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {investmentAccounts.map((account) => (
+                  <Card key={account.id}>
+                    <CardContent className="pt-6">
+                      <InvestmentPieChart
+                        investments={investmentsByAccount.get(account.id) || []}
+                        accountName={`${account.accountName} (${account.bankName})`}
+                      />
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>
