@@ -3,14 +3,14 @@ import { db } from "@/lib/db";
 import { accounts, balanceSnapshots, savingTypes, currencies } from "@wimm/db/schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { getCurrentYearMonth } from "@/lib/utils";
-import dynamic from "next/dynamic";
+import dynamicImport from "next/dynamic";
 
-const SnapshotsEditor = dynamic(() => import("@/components/snapshots-editor").then(mod => ({ default: mod.SnapshotsEditor })), {
+const SnapshotsEditor = dynamicImport(() => import("@/components/snapshots-editor").then(mod => ({ default: mod.SnapshotsEditor })), {
   loading: () => <div className="space-y-4"><div className="h-96 bg-muted animate-pulse rounded"></div></div>,
   ssr: false,
 });
 
-export const revalidate = 30; // Cache for 30 seconds
+export const dynamic = "force-dynamic";
 
 export default async function SnapshotsPage({
   searchParams,

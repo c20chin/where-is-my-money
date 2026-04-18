@@ -3,14 +3,14 @@ import { db } from "@/lib/db";
 import { currencies, userPreferences } from "@wimm/db/schema";
 import { eq } from "drizzle-orm";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import dynamic from "next/dynamic";
+import dynamicImport from "next/dynamic";
 
-const SettingsForm = dynamic(() => import("@/components/settings-form").then(mod => ({ default: mod.SettingsForm })), {
+const SettingsForm = dynamicImport(() => import("@/components/settings-form").then(mod => ({ default: mod.SettingsForm })), {
   loading: () => <div className="h-24 bg-muted animate-pulse rounded"></div>,
   ssr: false,
 });
 
-export const revalidate = 60; // Cache for 60 seconds
+export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
   const session = await auth();

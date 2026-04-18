@@ -2,14 +2,14 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { accounts, savingTypes, currencies, investments } from "@wimm/db/schema";
 import { eq, and, isNull, inArray } from "drizzle-orm";
-import dynamic from "next/dynamic";
+import dynamicImport from "next/dynamic";
 
-const AccountsList = dynamic(() => import("@/components/accounts-list").then(mod => ({ default: mod.AccountsList })), {
+const AccountsList = dynamicImport(() => import("@/components/accounts-list").then(mod => ({ default: mod.AccountsList })), {
   loading: () => <div className="space-y-4"><div className="h-12 bg-muted animate-pulse rounded"></div></div>,
   ssr: false,
 });
 
-export const revalidate = 30; // Cache for 30 seconds
+export const dynamic = "force-dynamic";
 
 export default async function AccountsPage() {
   const session = await auth();
