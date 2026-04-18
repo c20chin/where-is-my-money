@@ -17,7 +17,7 @@ const InvestmentPieChart = dynamic(() => import("@/components/investment-pie-cha
   ssr: false,
 });
 
-export const revalidate = 30; // Cache for 30 seconds
+export const dynamic = "force-dynamic";
 
 export default async function DashboardPage({
   searchParams,
