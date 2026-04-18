@@ -5,14 +5,14 @@ import { eq, and, isNull, desc, inArray } from "drizzle-orm";
 import { convertAmount } from "@/lib/exchange-rates";
 import { formatCurrency, getMonthName } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import dynamic from "next/dynamic";
+import dynamicImport from "next/dynamic";
 
-const DashboardCharts = dynamic(() => import("@/components/dashboard-charts").then(mod => ({ default: mod.DashboardCharts })), {
+const DashboardCharts = dynamicImport(() => import("@/components/dashboard-charts").then(mod => ({ default: mod.DashboardCharts })), {
   loading: () => <div className="grid gap-4 md:grid-cols-2"><Card><CardContent className="h-[300px] flex items-center justify-center">Loading charts...</CardContent></Card></div>,
   ssr: false,
 });
 
-const InvestmentPieChart = dynamic(() => import("@/components/investment-pie-chart").then(mod => ({ default: mod.InvestmentPieChart })), {
+const InvestmentPieChart = dynamicImport(() => import("@/components/investment-pie-chart").then(mod => ({ default: mod.InvestmentPieChart })), {
   loading: () => <div className="h-[300px] flex items-center justify-center text-muted-foreground">Loading chart...</div>,
   ssr: false,
 });
